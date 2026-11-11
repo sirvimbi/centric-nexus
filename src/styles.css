@@ -151,3 +151,9 @@ html:has(.vault-modal-backdrop),body:has(.vault-modal-backdrop),#root:has(.vault
 .vault-client-group-heading strong{font-size:14px;font-weight:800}
 .vault-client-group-heading span{font-size:11px;color:var(--muted,#8290a3)}
 .vault-client-credentials{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;padding-top:12px}
+
+/* Credential cards: category, account username, and concise latest audit event. */
+.vault-entry-head .vault-card-category{display:inline-flex;align-items:center;margin-top:7px;padding:4px 7px;border:1px solid #e5edf8;border-radius:6px;background:#f3f7fd;color:#55708f;font-size:9px;font-weight:700;letter-spacing:.2px}
+.vault-card-identity{position:relative;z-index:1;display:flex;flex-direction:column;gap:5px;min-width:0;padding:10px 11px;border:1px solid #edf1f6;border-radius:9px;background:rgba(255,255,255,.82)}
+.vault-card-identity strong{overflow:hidden;color:#3c506a;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.vault-card-identity small{color:#8a98aa;font-size:9px;line-height:1.45;overflow-wrap:anywhere}

@@ -132,7 +132,26 @@ export const listVaultEntries = onCall({region:REGION,cors:CALLABLE_CORS,secrets
   const ownerUid=scope==="personal"?a.uid:"shared"; requireVaultAccess(request,scope,ownerUid);
   if(!["personal","shared"].includes(scope)) throw new HttpsError("invalid-argument","Invalid vault scope.");
   const snap=await db.collection(`vault/${scope==="shared"?"shared":"personal_"+a.uid}/entries`).get();
-  return {entries:snap.docs.filter(doc=>!doc.data().deletedAt).map(doc=>({id:doc.id,...doc.data(),...decrypt(doc.data().encrypted),encrypted:undefined}))};
+  const active=snap.docs.filter(doc=>!doc.data().deletedAt);
+  const auditSnap=await db.collection("vaultAudit").where("scope","==",scope).get();
+  const latestByEntry=new Map();
+  auditSnap.docs.forEach(doc=>{
+    const event=doc.data(),current=latestByEntry.get(event.entryId);
+    const millis=event.createdAt?.toMillis?.()||0;
+    if(!current||millis>(current.createdAt?.toMillis?.()||0)) latestByEntry.set(event.entryId,event);
+  });
+  const actorIds=[...new Set([...latestByEntry.values()].map(event=>event.actorUid).filter(Boolean))];
+  const actorNames=new Map();
+  await Promise.all(actorIds.map(async uid=>{try{const u=await auth.getUser(uid);actorNames.set(uid,u.displayName||u.email||"Workspace user")}catch{actorNames.set(uid,"Former or unavailable user")}}));
+  return {entries:active.map(doc=>{
+    const data=doc.data(),event=latestByEntry.get(doc.id);
+    const changed=event?.action==="updated"&&event.changedFields?.length
+      ?"Changed "+event.changedFields.map(k=>({title:"credential name",category:"category",username:"username",password:"password",host:"host",port:"port",notes:"notes",setup:"setup instructions",clientName:"client account"}[k]||k)).join(", ")
+      :event?.action==="created"?"Credential created":event?.action==="deleted"?"Credential deleted":event?.action==="restored"?"Credential restored":"Credential saved";
+    const date=event?.createdAt?.toDate?.();
+    const summary=event?(changed+" · "+(actorNames.get(event.actorUid)||"Workspace user")+(date?" · "+date.toLocaleDateString("en-GB"):"")):"No change log recorded yet";
+    return {id:doc.id,...data,...decrypt(data.encrypted),encrypted:undefined,lastChange:{summary}};
+  })};
 });
 
 export const deleteVaultEntry = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
