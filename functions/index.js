@@ -213,19 +213,19 @@ export const listVaultCategories = onCall({region:REGION},async request=>{
   {id:"virtual-machine",name:"Virtual machine"},{id:"network",name:"Network"},{id:"vpn",name:"VPN"},
   {id:"email",name:"Email"},{id:"cloud",name:"Cloud service"},{id:"domain",name:"Domain / hosting"},{id:"other",name:"Other"}
  ];
- const saved=snap.docs.map(d=>({id:d.id,name:d.data().name}));
- const byId=new Map(defaults.map(x=>[x.id,x])); saved.forEach(x=>byId.set(x.id,x));
+ const saved=snap.docs.map(d=>({id:d.id,name:d.data().name,deleted:d.data().deleted===true}));
+ const byId=new Map(defaults.map(x=>[x.id,x])); saved.forEach(x=>{if(x.deleted)byId.delete(x.id);else byId.set(x.id,{id:x.id,name:x.name})});
  return {categories:[...byId.values()].sort((a,b)=>a.name.localeCompare(b.name))};
 
 export const saveVaultCategory = onCall({region:REGION},async request=>{
  const a=requireSuper(request),{id,name}=request.data||{};
  if(typeof name!=="string"||!name.trim()||name.trim().length>60) throw new HttpsError("invalid-argument","Category name must be 1–60 characters.");
  const categoryId=typeof id==="string"&&/^[a-z0-9_-]{1,80}$/.test(id)?id:name.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,80);
- await db.doc("vaultCategories/"+categoryId).set({name:name.trim(),updatedBy:a.uid,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+ await db.doc("vaultCategories/"+categoryId).set({name:name.trim(),deleted:false,updatedBy:a.uid,updatedAt:FieldValue.serverTimestamp()},{merge:true});
  return {id:categoryId,name:name.trim()};
 });
 export const deleteVaultCategory = onCall({region:REGION},async request=>{
  requireSuper(request);const id=request.data?.id;
  if(typeof id!=="string"||!id) throw new HttpsError("invalid-argument","Category id required.");
- await db.doc("vaultCategories/"+id).delete();return {ok:true};
+ await db.doc("vaultCategories/"+id).set({deleted:true,updatedBy:request.auth.uid,updatedAt:FieldValue.serverTimestamp()},{merge:true});return {ok:true};
 });
