@@ -144,3 +144,10 @@ html:has(.vault-modal-backdrop),body:has(.vault-modal-backdrop),#root:has(.vault
 .vault-category-manager .vault-category-chips>span{padding:7px 9px}
 .vault-category-manager .vault-category-chips button{padding:3px 5px}
 .vault-category-manager .vault-category-chips button:last-child{color:#c64e56}
+
+/* Client-level grouping in the shared credential vault. */
+.vault-client-group{grid-column:1/-1;min-width:0;margin-top:8px}
+.vault-client-group-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 2px;border-bottom:1px solid var(--border,#dce3ed);color:var(--text,#202b3c)}
+.vault-client-group-heading strong{font-size:14px;font-weight:800}
+.vault-client-group-heading span{font-size:11px;color:var(--muted,#8290a3)}
+.vault-client-credentials{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;padding-top:12px}
