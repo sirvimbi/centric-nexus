@@ -38,11 +38,30 @@ export default function VaultPage({user,role}) {
   }catch(e){setError(e.message||'Unable to load demo records.')}
   finally{setDemoBusy(false)}
  }
+ const parseCsv=(source)=>{
+  const rows=[];let row=[],value='',quoted=false;
+  for(let i=0;i<source.length;i++){const ch=source[i],next=source[i+1];if(ch==='\"'&&quoted&&next==='\"'){value+='\"';i++}else if(ch==='\"'){quoted=!quoted}else if(ch===','&&!quoted){row.push(value);value=''}else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&next==='\n')i++;row.push(value);if(row.some(x=>x.trim()))rows.push(row);row=[];value=''}else value+=ch}
+  row.push(value);if(row.some(x=>x.trim()))rows.push(row);if(quoted)throw new Error('CSV has an unclosed quoted field.');
+  const headers=(rows.shift()||[]).map(x=>x.trim().toLowerCase());
+  const required=['title','category','username','password','host','port','notes'];
+  if(!required.every(x=>headers.includes(x)))throw new Error('CSV headers must be: '+required.join(', '));
+  return rows.map(r=>Object.fromEntries(headers.map((h,i)=>[h,(r[i]||'').trim()]))).filter(x=>x.title);
+ };
+ const importCsv=async file=>{
+  if(!isSuperAdmin||scope!=='shared'||!file)return;
+  if(file.size>1048576){setError('CSV must be 1 MB or smaller.');return}
+  try{const items=parseCsv(await file.text());if(!items.length)throw new Error('No credential rows found.');if(items.length>100)throw new Error('Import is limited to 100 records.');
+   if(!confirm('Import '+items.length+' records into the Shared Client Vault? Each record is encrypted by the server.'))return;
+   setDemoBusy(true);setError('');let count=0;
+   for(const item of items){await call('saveVaultEntry',{...item,scope:'shared'});count++}
+   setNotice('Imported '+count+' records into the Shared Client Vault.');await load();
+  }catch(e){setError(e.message||'CSV import failed.')}finally{setDemoBusy(false)}
+ };
  const filtered=entries.filter(x=>`${x.title} ${x.category} ${x.host} ${x.username}`.toLowerCase().includes(search.toLowerCase()))
  const copy=async value=>{try{await navigator.clipboard.writeText(value||'')}catch(e){setError('Clipboard access was unavailable. Please copy the value manually.')}}
  const fields=[['title','Title','text'],['category','Category','text'],['username','Username','text'],['password','Password','password'],['host','Host / IP address','text'],['port','Port','text'],['notes','Comments','textarea'],['setup','Setup instructions','textarea']]
  return <section className="content-section">
-  <div className="section-heading"><div><p className="eyebrow">SECURE CREDENTIALS</p><h1>Clients Tools Access</h1><p>Encrypted credentials and connection notes.</p></div><div className="vault-heading-actions">{isSuperAdmin&&scope==='shared'&&<button className="button-secondary" onClick={loadDemo} disabled={demoBusy||busy}><Database size={15}/>{demoBusy?'Loading demo…':'Load sensitisation demo data'}</button>}<button className="button-primary" onClick={()=>setEditing({...blank})}><Plus size={16}/> New credential</button></div></div>
+  <div className="section-heading"><div><p className="eyebrow">SECURE CREDENTIALS</p><h1>Clients Tools Access</h1><p>Encrypted credentials and connection notes.</p></div><div className="vault-heading-actions">{isSuperAdmin&&scope==='shared'&&<label className="button-secondary vault-upload-label"><Database size={15}/>{demoBusy?'Importing CSV…':'Import credentials CSV'}<input type="file" accept=".csv,text/csv" disabled={demoBusy||busy} onChange={e=>{const file=e.target.files?.[0];e.target.value='';importCsv(file)}}/></label>}<button className="button-primary" onClick={()=>setEditing({...blank})}><Plus size={16}/> New credential</button></div></div>
   <div className="vault-tabs"><button className={scope==='shared'?'active':''} disabled={!canShared} onClick={()=>setScope('shared')}>Shared client vault</button><button className={scope==='personal'?'active':''} onClick={()=>setScope('personal')}>My personal vault</button></div>
   {scope==='shared'&&!canShared&&<p>Shared credentials are restricted to Admins and Super Admins.</p>}
   {error&&<p className="auth-alert error" role="alert">{error}</p>}{notice&&<p className="vault-notice" role="status">{notice}</p>}
