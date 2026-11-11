@@ -131,3 +131,16 @@ html:has(.vault-modal-backdrop),body:has(.vault-modal-backdrop),#root:has(.vault
 .vault-undo-toast span{flex:1;line-height:1.5}
 .vault-undo-toast button{border:0;border-radius:7px;padding:7px 10px;background:#fff;color:#244c78;font-size:10px;font-weight:800;cursor:pointer}
 .vault-undo-toast button:last-child{padding:5px;background:transparent;color:#dce8f5}
+
+
+/* Always-visible Super Admin category management */
+.vault-category-manager{margin:16px 0;padding:17px 18px;border:1px solid #dfe7f1;border-radius:13px;background:#fff;box-shadow:0 4px 14px rgba(25,45,70,.035)}
+.vault-category-manager-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}
+.vault-category-manager-heading strong{display:block;color:#354b66;font-size:13px}
+.vault-category-manager-heading p{margin:4px 0 0;color:#8290a3;font-size:10px}
+.vault-category-manager-heading>span{padding:5px 8px;border-radius:6px;background:#eef5ff;color:#3478f6;font-size:8px;font-weight:800;letter-spacing:.7px}
+.vault-category-manager .vault-category-add{max-width:560px}
+.vault-category-manager .vault-category-add input{font-size:11px}
+.vault-category-manager .vault-category-chips>span{padding:7px 9px}
+.vault-category-manager .vault-category-chips button{padding:3px 5px}
+.vault-category-manager .vault-category-chips button:last-child{color:#c64e56}
