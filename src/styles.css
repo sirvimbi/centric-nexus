@@ -108,3 +108,26 @@ html:has(.vault-modal-backdrop),body:has(.vault-modal-backdrop),#root:has(.vault
 .vault-toast.is-error{border-color:#f0caca;background:#fff5f5;color:#b8434b}
 .vault-toast button{display:grid;place-items:center;margin-left:5px;border:0;background:transparent;color:inherit}
 @media(max-width:640px){.vault-detail-backdrop{align-items:stretch}.vault-detail-page{width:100%}.vault-detail-header{padding:13px 16px}.vault-detail-content{padding:20px 14px 35px}.vault-detail-grid{grid-template-columns:1fr}.vault-detail-actions{flex-direction:column}.vault-detail-actions button{justify-content:center}.vault-card{min-height:210px}.vault-heading-actions{width:100%}.vault-heading-actions>*{flex:1}.vault-refresh{margin-left:0}}
+
+
+/* Credential audit timeline, category controls, and reversible-delete toast */
+.vault-audit-list{display:flex;flex-direction:column;gap:0;border-left:2px solid #e5edf7;margin-left:7px;padding-left:16px}
+.vault-audit-item{position:relative;padding:0 0 17px}
+.vault-audit-item:before{content:"";position:absolute;left:-22px;top:4px;width:9px;height:9px;border-radius:50%;background:#4b83d9;border:2px solid #fff;box-shadow:0 0 0 1px #cbd9ec}
+.vault-audit-item strong{display:block;color:#354b66;font-size:11px}
+.vault-audit-item p{margin:5px 0;color:#667990;font-size:10px;line-height:1.5}
+.vault-audit-item small,.vault-audit-empty{color:#8b99aa;font-size:9px}
+.vault-category-admin{margin-top:20px;padding:15px;border:1px solid var(--border,#e4eaf1);border-radius:10px;background:var(--surface-2,#f8fafd)}
+.vault-category-admin>strong{font-size:12px;color:var(--text,#354b66)}
+.vault-category-admin>p{font-size:10px;color:var(--muted,#8290a3);margin:5px 0 12px}
+.vault-category-add{display:flex;gap:8px}
+.vault-category-add input{flex:1;min-width:0;padding:9px 10px;border:1px solid var(--border,#dce3ed);border-radius:8px;background:var(--surface,#fff);color:inherit}
+.vault-category-chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}
+.vault-category-chips>span{display:inline-flex;align-items:center;gap:6px;padding:5px 7px;border:1px solid var(--border,#e1e8f0);border-radius:7px;background:var(--surface,#fff);font-size:10px;color:var(--text,#50647e)}
+.vault-category-chips button{border:0;background:transparent;color:#3478f6;font-size:9px;cursor:pointer}
+.vault-field select{display:block;width:100%;margin-top:7px;padding:11px 12px;border:1px solid var(--border,#dce3ed);border-radius:8px;background:var(--surface-2,#fff);color:inherit;font:400 12px 'DM Sans',sans-serif}
+.vault-card-summary{position:relative;z-index:1;margin:2px 0 0;padding:11px;border:1px solid #edf1f6;border-radius:9px;background:rgba(255,255,255,.82);color:#718198;font-size:10px}
+.vault-undo-toast{position:fixed;right:22px;bottom:22px;z-index:2100;display:flex;align-items:center;gap:12px;max-width:min(520px,calc(100vw - 28px));padding:12px 14px;border:1px solid #c9d8ee;border-radius:11px;background:#172b49;color:#fff;box-shadow:0 12px 35px rgba(15,30,50,.25);font-size:11px}
+.vault-undo-toast span{flex:1;line-height:1.5}
+.vault-undo-toast button{border:0;border-radius:7px;padding:7px 10px;background:#fff;color:#244c78;font-size:10px;font-weight:800;cursor:pointer}
+.vault-undo-toast button:last-child{padding:5px;background:transparent;color:#dce8f5}
