@@ -60,6 +60,11 @@ function WorkspaceApp({ user }) {
   const [defaultTaskView, setDefaultTaskView] = useState(() => loadState('defaultTaskView', 'Overview'))
   const [weeklyDigest, setWeeklyDigest] = useState(() => loadState('weeklyDigest', true))
   const [toast, setToast] = useState('')
+  const [preferredName, setPreferredName] = useState(user?.displayName || '')
+  const [clockNow, setClockNow] = useState(() => new Date())
+  useEffect(() => { const timer = window.setInterval(() => setClockNow(new Date()), 60000); return () => window.clearInterval(timer) }, [])
+  const greeting = getTimeGreeting(clockNow, preferredName || user?.displayName || '')
+  const todayLabel = new Intl.DateTimeFormat(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }).format(clockNow).toUpperCase()
   useEffect(() => { localStorage.setItem('centric-nexus:projects', JSON.stringify(projects)) }, [projects])
   useEffect(() => { localStorage.setItem('centric-nexus:tasks', JSON.stringify(tasks)) }, [tasks])
   useEffect(() => { localStorage.setItem('centric-nexus:notifications', JSON.stringify(notifications)) }, [notifications])
@@ -143,14 +148,14 @@ function WorkspaceApp({ user }) {
       </header>
 
       <div className="content">
-        {page === 'Overview' && canFeature('Overview') && <Overview projects={projects} tasks={visibleTasks} allTasks={tasks} setPage={setPage} setSelectedTask={setSelectedTask} setFilter={setFilter} setShowNewProject={setShowNewProject} canEdit={canEdit}/>}
+        {page === 'Overview' && canFeature('Overview') && <Overview projects={projects} tasks={visibleTasks} allTasks={tasks} setPage={setPage} setSelectedTask={setSelectedTask} setFilter={setFilter} setShowNewProject={setShowNewProject} canEdit={canEdit} greeting={greeting} todayLabel={todayLabel}/>}
         {page === 'Projects' && canFeature('Projects') && <Projects projects={projects} tasks={tasks} setSelectedTask={setSelectedTask} setShowNewProject={setShowNewProject} canEdit={canEdit} setPage={setPage} deleteProject={deleteProject}/>}
         {page === 'My tasks' && canFeature('My tasks') && <TasksPage tasks={visibleTasks} setSelectedTask={setSelectedTask} filter={filter} setFilter={setFilter} canEdit={canEdit} updateTask={updateTask} setShowNewTask={setShowNewTask}/>}
         {page === 'Timeline' && canFeature('Timeline') && <Timeline projects={projects} tasks={tasks} setSelectedTask={setSelectedTask}/>}
         {page === 'Discussions' && canFeature('Discussions') && <Discussions tasks={tasks} setSelectedTask={setSelectedTask}/>}
         {page === 'Team & access' && canFeature('Team & access') && <Access role={role} setRole={setRole} isSuper={isSuper}/>}
         {page === 'Activity log' && canFeature('Activity log') && <ActivityLog tasks={tasks}/>}
-        {page === 'Settings' && <SettingsPage user={user} role={role} workspaceName={workspaceName} setWorkspaceName={setWorkspaceName} defaultTaskView={defaultTaskView} setDefaultTaskView={setDefaultTaskView} weeklyDigest={weeklyDigest} setWeeklyDigest={setWeeklyDigest} setToast={setToast}/>}
+        {page === 'Settings' && <SettingsPage user={user} role={role} workspaceName={workspaceName} setWorkspaceName={setWorkspaceName} defaultTaskView={defaultTaskView} setDefaultTaskView={setDefaultTaskView} weeklyDigest={weeklyDigest} setWeeklyDigest={setWeeklyDigest} setToast={setToast} preferredName={preferredName} setPreferredName={setPreferredName}/>}
         {page === 'Clients Tools Access' && <VaultPage user={user} role={role}/>}
       {page === 'Notifications' && <NotificationsPage notifications={notifications} setNotifications={setNotifications}/>}
         {page === 'Help' && <HelpPage/>}
@@ -176,7 +181,7 @@ function Overview({ projects, tasks, allTasks, setPage, setSelectedTask, setFilt
   const active = allTasks.filter(t => t.status !== 'Done')
   const done = allTasks.filter(t => t.status === 'Done')
   return <>
-    <PageHeading eyebrow="THURSDAY, OCTOBER 29, 2026" title="Good morning, there 👋" description="Here's what's happening across your projects today." actions={<><button className="button-secondary" onClick={() => {setPage('Projects')}}><FolderKanban size={15}/> All projects</button>{canEdit && <button className="button-primary" onClick={() => setShowNewProject(true)}><Plus size={16}/> New project</button>}</>}/>
+    <PageHeading eyebrow={todayLabel} title={greeting} description="Your day, your people, your momentum. Here’s what’s moving across your workspace." actions={<><button className="button-secondary" onClick={() => {setPage('Projects')}}><FolderKanban size={15}/> All projects</button>{canEdit && <button className="button-primary" onClick={() => setShowNewProject(true)}><Plus size={16}/> New project</button>}</>}/>
     <div className="welcome-banner"><div className="welcome-copy"><div className="welcome-pill"><Sparkles size={13}/> YOUR WORKSPACE AT A GLANCE</div><h2>Make progress visible.<br/><span>Keep everyone in sync.</span></h2><p>One connected view of your work, deadlines and team momentum.</p><button onClick={() => setPage('My tasks')}>View my tasks <ArrowRight size={15}/></button></div><div className="banner-art"><div className="art-ring ring-one"/><div className="art-ring ring-two"/><div className="art-card art-card-main"><div className="art-card-head"><span/><span/><span/></div><div className="art-check"><Check size={19}/></div><div className="art-line long"/><div className="art-line medium"/><div className="art-progress"><span/></div></div><div className="art-card art-card-small"><div className="art-mini-icon"><TrendingUp size={16}/></div><div><strong>+18.4%</strong><small>Team momentum</small></div></div><div className="art-check-float"><CheckCheck size={18}/></div></div></div>
     <div className="stats-grid">
       <StatCard icon={FolderKanban} label="Active projects" value={projects.length} meta="Across your workspace" tint="blue" trend="All in one place"/>
@@ -237,16 +242,16 @@ function Access({role,isSuper}) {
  </>}
 function RoleCard({icon:Icon,title,description}){return <div className="role-card"><div className="role-card-icon"><Icon size={17}/></div><strong>{title}</strong><p>{description}</p></div>}
 function ActivityLog({tasks}) { const entries=tasks.flatMap(t=>t.history.map((h,i)=>({...h,task:t.title,id:`${t.id}-${i}`}))).sort((a,b)=>a.when==='Just now'?-1:1);return <><PageHeading eyebrow="WORKSPACE / TRANSPARENCY" title="Activity log" description="A readable trail of changes across your tasks." actions={<button className="button-secondary"><Download size={14}/> Export history</button>}/><section className="panel activity-panel"><div className="panel-heading"><div><h3>Recent activity</h3><p>Who changed what, and when</p></div><span className="audit-badge"><LockKeyhole size={12}/> Audit trail</span></div><div className="activity-list">{entries.map(e=><div className="activity-entry" key={e.id}><div className="activity-avatar"><History size={16}/></div><div className="activity-entry-copy"><strong>{e.who}</strong><span>{e.what}</span><small>In <b>{e.task}</b></small></div><time>{e.when}</time></div>)}</div></section></>}
-function SettingsPage({role,workspaceName,setWorkspaceName,defaultTaskView,setDefaultTaskView,weeklyDigest,setWeeklyDigest,setToast,user}) {
- const [name,setName]=useState(user?.displayName||''),[password,setPassword]=useState('')
- const saveName=async()=>{try{const {updateProfile}=await import('firebase/auth');await updateProfile(auth.currentUser,{displayName:name.trim()});setToast('Display name updated.')}catch{setToast('Unable to update display name.')}}
+function SettingsPage({role,workspaceName,setWorkspaceName,defaultTaskView,setDefaultTaskView,weeklyDigest,setWeeklyDigest,setToast,user,preferredName,setPreferredName}) {
+ const [name,setName]=useState(preferredName||user?.displayName||''),[password,setPassword]=useState('')
+ const saveName=async()=>{try{const {updateProfile}=await import('firebase/auth');await updateProfile(auth.currentUser,{displayName:name.trim()});setPreferredName(name.trim());setToast('Preferred name updated. Your greeting is ready to shine.')}catch{setToast('Unable to update display name.')}}
  const changePassword=async()=>{try{const {httpsCallable}=await import('firebase/functions');const {functions}=await import('./firebase');await httpsCallable(functions,'changeOwnPassword')({password});setPassword('');setToast('Password updated.')}catch(e){setToast(e.message||'Password update failed.')}}
  return <><PageHeading eyebrow="ACCOUNT / SECURITY" title="Settings" description="Manage your account details and security."/>
  <div className="settings-grid"><section className="panel settings-panel"><div className="panel-heading"><div><h3>Your account</h3><p>Your email and assigned role are managed by the Super Admin.</p></div><ShieldCheck size={18}/></div>
  <label className="setting-row"><span><strong>Email address</strong><small>Read-only account identifier</small></span><input value={user?.email||''} readOnly/></label>
  <label className="setting-row"><span><strong>Workspace role</strong><small>Contact a Super Admin to change your role</small></span><input value={role} readOnly/></label>
- <label className="setting-row"><span><strong>Display name</strong><small>You can update your own name</small></span><input value={name} onChange={e=>setName(e.target.value)} maxLength={100}/></label>
- <div className="settings-save"><button className="button-primary" onClick={saveName}>Save name</button></div>
+ <label className="setting-row"><span><strong>Preferred name</strong><small>We’ll use this in your personalized workspace greeting</small></span><input value={name} onChange={e=>setName(e.target.value)} maxLength={100}/></label>
+ <div className="settings-save"><button className="button-primary" onClick={saveName}>Save preferred name</button></div>
  <label className="setting-row"><span><strong>New password</strong><small>At least 6 characters</small></span><input type="password" value={password} onChange={e=>setPassword(e.target.value)} minLength={6} placeholder="Enter a new password"/></label>
  <div className="settings-save"><button className="button-primary" disabled={password.length<6} onClick={changePassword}>Change password</button><button className="button-secondary" onClick={()=>signOut(auth)}>Log out</button></div>
  </section>
