@@ -14,6 +14,21 @@ import {
 } from 'lucide-react'
 import './styles.css'
 
+const getTimeGreeting = (date, name) => {
+  const hour = date.getHours()
+  const period = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening'
+  const greetings = {
+    morning: [['Good morning', '☀️'], ['Habari za asubuhi', '🌅'], ['Buenos días', '🌞'], ['Buongiorno', '✨'], ['Bonjour', '🌤️'], ['Aloha kakahiaka', '🌺']],
+    afternoon: [['Good afternoon', '🌤️'], ['Habari za mchana', '☀️'], ['Buenas tardes', '🌻'], ['Buon pomeriggio', '✨'], ['Bon après-midi', '🌿'], ['Aloha awakea', '🌴']],
+    evening: [['Good evening', '🌙'], ['Habari za jioni', '🌆'], ['Buenas noches', '🌙'], ['Buonasera', '✨'], ['Bonsoir', '🌃'], ['Aloha ahiahi', '🌺']]
+  }
+  const day = Math.floor(date.getTime() / 86400000)
+  const options = greetings[period]
+  const [phrase, emoji] = options[((day % options.length) + options.length) % options.length]
+  const cleanName = String(name || '').trim().split(/\s+/)[0]
+  return phrase + (cleanName ? ', ' + cleanName : '') + '! ' + emoji
+}
+
 const initialProjects = [
   { id: 1, name: 'Client Portal Redesign', client: 'Northstar Group', color: '#3478f6', progress: 72, status: 'On track', due: 'Nov 18, 2026', lead: 'Amara W.', tasks: 18, done: 13 },
   { id: 2, name: 'Operations Automation', client: 'Northstar Group', color: '#8b6ae8', progress: 48, status: 'At risk', due: 'Nov 08, 2026', lead: 'Daniel K.', tasks: 21, done: 10 },
@@ -176,7 +191,7 @@ function NavButton({ icon: Icon, label, page, setPage, count }) {
 function PageHeading({ eyebrow, title, description, actions }) {
   return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div><div className="heading-actions">{actions}</div></div>
 }
-function Overview({ projects, tasks, allTasks, setPage, setSelectedTask, setFilter, setShowNewProject, canEdit }) {
+function Overview({ projects, tasks, allTasks, setPage, setSelectedTask, setFilter, setShowNewProject, canEdit, greeting, todayLabel }) {
   const overdue = allTasks.filter(t => dueKind(t) === 'delayed')
   const active = allTasks.filter(t => t.status !== 'Done')
   const done = allTasks.filter(t => t.status === 'Done')
