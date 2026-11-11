@@ -118,9 +118,9 @@ export const saveVaultEntry = onCall({region:REGION,secrets:[vaultKey]},async re
   const old=await ref.get();
   if(old.exists && old.data().createdBy!==a.uid && a.token.superAdmin!==true && a.token.role!=="Admin") throw new HttpsError("permission-denied","Cannot edit this entry.");
   const previous=old.exists?decrypt(old.data().encrypted):null;
-  const changedFields=old.exists?Object.keys(data).filter(key=>(previous?.[key]||"")!==(data[key]||"")):Object.keys(data).filter(key=>(data[key]||"")!=="");
+  const changedFields=old.exists?Object.keys(data).filter(key=>String(previous?.[key]??"")!==String(data[key]??"")):Object.keys(data).filter(key=>String(data[key]??"")!=="");
   await ref.set({scope,ownerUid,encrypted:encrypt(data),title:data.title,category:data.category,host:data.host,createdBy:old.exists?old.data().createdBy:a.uid,createdAt:old.exists?old.data().createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
-  if(changedFields.length) await db.collection("vaultAudit").add({scope,entryId:id,actorUid:a.uid,action:old.exists?"updated":"created",changedFields,createdAt:FieldValue.serverTimestamp()});
+  if(!old.exists || changedFields.length) await db.collection("vaultAudit").add({scope,entryId:id,actorUid:a.uid,action:old.exists?"updated":"created",changedFields,createdAt:FieldValue.serverTimestamp()});
   return {id};
 });
 
@@ -207,16 +207,16 @@ export const listVaultAudit = onCall({region:REGION},async request=>{
 // Categories are centrally managed and can only be changed by the Super Admin.
 export const listVaultCategories = onCall({region:REGION},async request=>{
  actor(request);
- const snap=await db.collection("vaultCategories").orderBy("name").get();
+ const snap=await db.collection("vaultCategories").get();
  const defaults=[
   {id:"application",name:"Application"},{id:"database",name:"Database"},{id:"server",name:"Server"},
   {id:"virtual-machine",name:"Virtual machine"},{id:"network",name:"Network"},{id:"vpn",name:"VPN"},
   {id:"email",name:"Email"},{id:"cloud",name:"Cloud service"},{id:"domain",name:"Domain / hosting"},{id:"other",name:"Other"}
  ];
- const saved=snap.docs.map(d=>({id:d.id,name:d.data().name,deleted:d.data().deleted===true}));
- const byId=new Map(defaults.map(x=>[x.id,x])); saved.forEach(x=>{if(x.deleted)byId.delete(x.id);else byId.set(x.id,{id:x.id,name:x.name})});
+ const byId=new Map(defaults.map(x=>[x.id,x]));
+ snap.docs.forEach(doc=>{const d=doc.data();if(d.deleted===true)byId.delete(doc.id);else if(d.name)byId.set(doc.id,{id:doc.id,name:d.name})});
  return {categories:[...byId.values()].sort((a,b)=>a.name.localeCompare(b.name))};
-
+});
 export const saveVaultCategory = onCall({region:REGION},async request=>{
  const a=requireSuper(request),{id,name}=request.data||{};
  if(typeof name!=="string"||!name.trim()||name.trim().length>60) throw new HttpsError("invalid-argument","Category name must be 1–60 characters.");
