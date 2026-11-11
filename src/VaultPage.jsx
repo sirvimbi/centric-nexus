@@ -109,8 +109,8 @@ export default function VaultPage({user,role}) {
    <div className="vault-client-group-heading"><strong>{group.name}</strong><span>{group.items.length} {group.items.length===1?"credential":"credentials"}</span></div>
    <div className="vault-client-credentials">{group.items.map((x,i)=><article className={"vault-entry vault-card vault-tone-"+(i%5)} key={x.id}>
     <div className="vault-card-top"><span className="vault-card-icon"><Server size={18}/></span><span className="vault-card-lock"><LockKeyhole size={13}/> ENCRYPTED</span></div>
-    <div className="vault-entry-head"><div><strong>{x.title}</strong><small>{x.category||"Credential"}</small></div></div>
-    <p className="vault-card-summary">Securely stored access details</p>
+    <div className="vault-entry-head"><div><strong>{x.title}</strong><small className="vault-card-category">{x.category||"Credential"}</small></div></div>
+    <div className="vault-card-identity"><strong>{x.username||"Username not set"}</strong><small>{x.lastChange?.summary||"No change log recorded yet"}</small></div>
     <div className="vault-card-bottom"><span><ShieldCheck size={14}/> Secure entry</span><button className="vault-open-button" onClick={()=>setSelected(x)}>View credentials <ArrowLeft size={14}/></button></div>
    </article>)}</div>
   </section>)}</div>
