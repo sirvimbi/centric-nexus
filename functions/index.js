@@ -116,7 +116,7 @@ export const saveVaultEntry = onCall({region:REGION,cors:CALLABLE_CORS,secrets:[
   requireVaultAccess(request,scope,ownerUid);
   if(!["personal","shared"].includes(scope)) throw new HttpsError("invalid-argument","Invalid vault scope.");
   const id=typeof d.id==="string"&&/^[a-zA-Z0-9_-]{1,100}$/.test(d.id)?d.id:crypto.randomUUID();
-  const data={title:cleanString(d.title,160),category:cleanString(d.category,80),username:cleanString(d.username||"",500),password:cleanString(d.password||"",4000),host:cleanString(d.host||"",500),port:cleanString(d.port||"",30),notes:cleanString(d.notes||"",10000),setup:cleanString(d.setup||"",12000)};
+  const data={title:cleanString(d.title,160),clientName:cleanString(d.clientName||"",160),category:cleanString(d.category,80),username:cleanString(d.username||"",500),password:cleanString(d.password||"",4000),host:cleanString(d.host||"",500),port:cleanString(d.port||"",30),notes:cleanString(d.notes||"",10000),setup:cleanString(d.setup||"",12000)};
   const ref=db.doc(`vault/${scope==="shared"?"shared":"personal_"+a.uid}/entries/${id}`);
   const old=await ref.get();
   if(old.exists && old.data().createdBy!==a.uid && a.token.superAdmin!==true && a.token.role!=="Admin") throw new HttpsError("permission-denied","Cannot edit this entry.");
