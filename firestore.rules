@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signedIn(){ return request.auth != null; }
+  function superAdmin(){ return signedIn() && request.auth.token.superAdmin == true; }
+  function roleIs(r){ return signedIn() && request.auth.token.role == r; }
+  function member(w){ return signedIn() && exists(/databases/$(database)/documents/workspaces/$(w)/members/$(request.auth.uid)); }
+  function activeMember(w){ return member(w) && get(/databases/$(database)/documents/workspaces/$(w)/members/$(request.auth.uid)).data.status == 'active'; }
+  function canSee(feature){ return superAdmin() || (request.auth.token.features is map && request.auth.token.features.get(feature, false) == true); }
+  function canManage(){ return superAdmin() || roleIs('Admin'); }
+  function canEdit(){ return canManage() || roleIs('Project editor'); }
+
+  match /users/{uid} {
+   allow read: if signedIn() && request.auth.uid == uid;
+   allow create, delete: if false;
+   allow update: if signedIn() && request.auth.uid == uid
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName','updatedAt']);
+  }
+  match /workspaces/{wid} {
+   allow read: if activeMember(wid) && canSee('Overview');
+   allow write: if false;
+   match /members/{uid} { allow read: if superAdmin() || (activeMember(wid) && canSee('Team & access') && canManage()); allow write: if false; }
+   match /projects/{id} {
+    allow read: if activeMember(wid) && canSee('Projects');
+    allow create: if activeMember(wid) && canSee('Projects') && canEdit();
+    allow update: if activeMember(wid) && canSee('Projects') && canEdit();
+    allow delete: if activeMember(wid) && canSee('Projects') && canManage();
+   }
+   match /tasks/{id} {
+    allow read: if activeMember(wid) && (canSee('My tasks') || canSee('Projects'));
+    allow create, update: if activeMember(wid) && canSee('My tasks') && canEdit();
+    allow delete: if activeMember(wid) && canSee('My tasks') && canManage();
+    match /comments/{cid} {
+     allow read: if activeMember(wid) && canSee('Discussions');
+     allow create: if activeMember(wid) && canSee('Discussions') && request.resource.data.authorUid == request.auth.uid;
+     allow update, delete: if activeMember(wid) && canSee('Discussions') && (resource.data.authorUid == request.auth.uid || canManage());
+    }
+   }
+   match /activity/{id} { allow read: if activeMember(wid) && canSee('Activity log'); allow write: if false; }
+   match /notifications/{id} { allow read, update: if activeMember(wid) && resource.data.recipientUid == request.auth.uid; allow create, delete: if false; }
+  }
+  // Vault plaintext is only returned by callable Functions after role/owner checks.
+  match /vault/{vaultId}/entries/{id} { allow read, write: if false; }
+  match /vaultAudit/{id} { allow read: if superAdmin() || roleIs('Admin'); allow write: if false; }
+ }
+}

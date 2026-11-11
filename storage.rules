@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+ match /b/{bucket}/o {
+  function signedIn(){return request.auth != null;}
+  function member(w){return signedIn() && firestore.exists(/databases/(default)/documents/workspaces/$(w)/members/$(request.auth.uid));}
+  function activeMember(w){return member(w) && firestore.get(/databases/(default)/documents/workspaces/$(w)/members/$(request.auth.uid)).data.status == 'active';}
+  function feature(name){return request.auth.token.superAdmin == true || (request.auth.token.features is map && request.auth.token.features.get(name,false) == true);}
+  function canEdit(){return request.auth.token.superAdmin == true || request.auth.token.role in ['Admin','Project editor'];}
+  match /workspaces/{workspaceId}/projects/{projectId}/{allPaths=**} {
+   allow read: if activeMember(workspaceId) && feature('Projects');
+   allow create, update: if activeMember(workspaceId) && feature('Projects') && canEdit()
+     && request.resource.size < 20 * 1024 * 1024
+     && request.resource.contentType.matches('image/.*|application/pdf|text/plain|application/vnd.openxmlformats-officedocument.*');
+   allow delete: if activeMember(workspaceId) && feature('Projects') && canEdit();
+  }
+  match /{allPaths=**} {allow read,write:if false;}
+ }
+}

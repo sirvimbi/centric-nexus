@@ -1,0 +1,19 @@
+node_modules
+dist
+.env
+.DS_Store
+*.log
+.idea/
+.firebase/
+
+# Local credentials and build output
+.env
+.env.*
+!.env.example
+service-account*.json
+*-service-account*.json
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+coverage/
+dist/
