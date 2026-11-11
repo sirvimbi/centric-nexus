@@ -52,7 +52,7 @@ export const createWorkspaceUser = onCall({ region: REGION }, async request => {
   const admin = requireSuper(request);
   const { email, password, displayName, role } = request.data || {};
   if (!["Client viewer","Project editor","Admin"].includes(role)) throw new HttpsError("invalid-argument","Unsupported role.");
-  if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== "string" || password.length < 12) throw new HttpsError("invalid-argument","Provide a valid email and a temporary password of at least 12 characters.");
+  if (typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || typeof password !== "string" || password.length < 6) throw new HttpsError("invalid-argument","Provide a valid email and a temporary password of at least 6 characters.");
   const user = await auth.createUser({ email: email.trim().toLowerCase(), password, displayName: cleanString(displayName || "",100), disabled: false });
   const grantDoc = await db.doc(`workspaces/${WORKSPACE}/roleFeatures/${encodeURIComponent(role)}`).get();
   const features = grantDoc.exists ? grantDoc.data().features : {};
@@ -82,7 +82,7 @@ export const updateWorkspaceUser = onCall({ region: REGION }, async request => {
     claims.features = Object.fromEntries(["Overview","Projects","My tasks","Timeline","Discussions","Team & access","Activity log","Settings","Clients Tools Access"].map(k=>[k,features[k]===true]));
   }
   if (password !== undefined) {
-    if (typeof password !== "string" || password.length < 12) throw new HttpsError("invalid-argument","Password must be at least 12 characters.");
+    if (typeof password !== "string" || password.length < 6) throw new HttpsError("invalid-argument","Password must be at least 6 characters.");
     await auth.updateUser(uid,{password});
     claims.mustChangePassword = true;
   }
@@ -100,7 +100,7 @@ export const updateWorkspaceUser = onCall({ region: REGION }, async request => {
 
 export const changeOwnPassword = onCall({region:REGION},async request=>{
   const a=actor(request), {password}=request.data||{};
-  if(typeof password!=="string"||password.length<12) throw new HttpsError("invalid-argument","Password must be at least 12 characters.");
+  if(typeof password!=="string"||password.length<6) throw new HttpsError("invalid-argument","Password must be at least 6 characters.");
   await auth.updateUser(a.uid,{password});
   const u=await auth.getUser(a.uid), claims={...(u.customClaims||{}),mustChangePassword:false};
   await auth.setCustomUserClaims(a.uid,claims);
@@ -188,7 +188,7 @@ export const deleteWorkspaceUser = onCall({region:REGION},async request=>{
 
 
 // Credential audit history: field names only are recorded; secret values are never copied into the audit log.
-export const listVaultAudit = onCall({region:REGION},async request=>{
+export const listVaultAudit = onCall({region:REGION,secrets:[vaultKey]},async request=>{
  const a=actor(request),{scope,entryId}=request.data||{},ownerUid=scope==="personal"?a.uid:"shared";
  requireVaultAccess(request,scope,ownerUid);
  if(!["personal","shared"].includes(scope)||typeof entryId!=="string") throw new HttpsError("invalid-argument","Invalid audit request.");
