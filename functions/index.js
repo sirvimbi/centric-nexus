@@ -195,8 +195,9 @@ export const listVaultAudit = onCall({region:REGION,cors:CALLABLE_CORS,secrets:[
  const a=actor(request),{scope,entryId}=request.data||{},ownerUid=scope==="personal"?a.uid:"shared";
  requireVaultAccess(request,scope,ownerUid);
  if(!["personal","shared"].includes(scope)||typeof entryId!=="string") throw new HttpsError("invalid-argument","Invalid audit request.");
- const snap=await db.collection("vaultAudit").where("scope","==",scope).where("entryId","==",entryId).get();
- const events=snap.docs.map(doc=>({id:doc.id,...doc.data()}));
+ // Query by scope only to avoid a composite-index requirement; filter the selected entry locally.
+ const snap=await db.collection("vaultAudit").where("scope","==",scope).get();
+ const events=snap.docs.map(doc=>({id:doc.id,...doc.data()})).filter(item=>item.entryId===entryId);
  const entryRef=db.doc("vault/"+(scope==="shared"?"shared":"personal_"+a.uid)+"/entries/"+entryId);
  const entry=await entryRef.get();
  if(entry.exists&&!events.some(x=>x.action==="created")){const d=entry.data();events.push({id:"created-"+entryId,actorUid:d.createdBy,action:"created",changedFields:Object.keys(decrypt(d.encrypted)).filter(k=>k!=="password"),createdAt:d.createdAt});}

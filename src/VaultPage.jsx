@@ -19,11 +19,12 @@ export default function VaultPage({user,role}) {
  const [toast,setToast]=useState(null)
  const [audit,setAudit]=useState([])
  const [auditBusy,setAuditBusy]=useState(false)
+ const [auditError,setAuditError]=useState('')
  const [undoItem,setUndoItem]=useState(null)
  const [undoSeconds,setUndoSeconds]=useState(0)
  const [categories,setCategories]=useState([])
  const [categoryDraft,setCategoryDraft]=useState('')
- const blank={title:'',category:'Application',username:'',password:'',host:'',port:'',notes:'',setup:''}
+ const blank={clientName:'',title:'',category:'Application',username:'',password:'',host:'',port:'',notes:'',setup:''}
  const call=async(name,data)=>httpsCallable(functions,name)(data)
  const refreshEntries=async({silent=false}={})=>{
   if(!silent)setBusy(true)
@@ -36,7 +37,7 @@ export default function VaultPage({user,role}) {
  useEffect(()=>{if(!selected){setAudit([]);return}loadAudit(selected.id)},[selected?.id,scope])
  useEffect(()=>{if(!undoItem)return;const timer=window.setInterval(()=>setUndoSeconds(v=>{if(v<=1){window.clearInterval(timer);setUndoItem(null);return 0}return v-1}),1000);return()=>window.clearInterval(timer)},[undoItem?.id])
  const showToast=(message,type='success')=>{setToast({message,type});window.clearTimeout(showToast.timer);showToast.timer=window.setTimeout(()=>setToast(null),2600)}
- const loadAudit=async id=>{if(!id)return;setAuditBusy(true);try{const r=await call('listVaultAudit',{scope,entryId:id});setAudit(r.data.history||[])}catch(e){setAudit([]);setError(e.message||'Unable to load credential history.')}finally{setAuditBusy(false)}}
+ const loadAudit=async id=>{if(!id)return;setAuditBusy(true);setAuditError('');try{const r=await call('listVaultAudit',{scope,entryId:id});setAudit(r.data.history||[])}catch(e){setAudit([]);setAuditError((e.code?e.code+': ':'')+(e.message||'Unable to load credential history.'))}finally{setAuditBusy(false)}}
  const save=async e=>{
   e.preventDefault();setBusy(true);setError('')
   try{const result=await call('saveVaultEntry',{...editing,scope});setEditing(null);await refreshEntries({silent:true});if(selected?.id===result.data.id){setSelected(v=>({...v,...editing}));await loadAudit(result.data.id)}showToast('Credential saved securely')}
@@ -90,8 +91,9 @@ export default function VaultPage({user,role}) {
   try{await navigator.clipboard.writeText(value||'');showToast(label+' copied to clipboard')}
   catch(e){setError('Clipboard access was unavailable. Please check browser permissions.');showToast('Copy failed — clipboard permission denied','error')}
  }
- const filtered=entries.filter(x=>`${x.title} ${x.category} ${x.host} ${x.username}`.toLowerCase().includes(search.toLowerCase()))
- const fields=[['title','Title','text'],['category','Category','select'],['username','Username','text'],['password','Password','password'],['host','Host / IP address','text'],['port','Port','text'],['notes','Comments','textarea'],['setup','Setup instructions','textarea']]
+ const filtered=entries.filter(x=>([x.clientName,x.title,x.category,x.host,x.username].join(' ')).toLowerCase().includes(search.toLowerCase()))
+ const groupedEntries=Object.values(filtered.reduce((groups,item)=>{const label=(item.clientName||'').trim()||item.title||'Unassigned client';const key=label.toLowerCase();if(!groups[key])groups[key]={name:label,items:[]};groups[key].items.push(item);return groups},{})).sort((a,b)=>a.name.localeCompare(b.name))
+ const fields=[['clientName','Client account','text'],['title','Credential / tool name','text'],['category','Category','select'],['username','Username','text'],['password','Password','password'],['host','Host / IP address','text'],['port','Port','text'],['notes','Comments','textarea'],['setup','Setup instructions','textarea']]
  const Field=({label,value,secret=false})=>{
   const [show,setShow]=useState(false)
   return <div className="vault-detail-field"><div className="vault-detail-label">{label}</div><div className="vault-detail-value">{secret&&!show?'••••••••••••':(value||'—')}<div className="vault-field-actions">{secret&&<button className="vault-mini-action" onClick={()=>setShow(v=>!v)} aria-label={show?'Hide password':'Show password'}>{show?<EyeOff size={15}/>:<Eye size={15}/>}</button>}<button className="vault-mini-action" onClick={()=>copy(value,label)} aria-label={'Copy '+label}><Copy size={14}/></button></div></div></div>
@@ -103,20 +105,23 @@ export default function VaultPage({user,role}) {
   {isSuperAdmin&&<section className="vault-category-manager"><div className="vault-category-manager-heading"><div><strong>Credential categories</strong><p>Manage the categories available to everyone in the vault.</p></div><span>SUPER ADMIN</span></div><div className="vault-category-add"><input value={categoryDraft} onChange={e=>setCategoryDraft(e.target.value)} placeholder="Add a category"/><button type="button" className="button-primary" onClick={saveCategory} disabled={!categoryDraft.trim()}>Add category</button></div><div className="vault-category-chips">{categories.map(item=><span key={item.id}>{item.name}<button type="button" onClick={()=>renameCategory(item)}>Edit</button><button type="button" onClick={()=>removeCategory(item)} aria-label={'Delete '+item.name}>Delete</button></span>)}</div></section>}
   <label className="search-box"><Search size={16}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search credentials…"/></label>
   {busy&&<p className="vault-loading">Loading encrypted vault…</p>}
-  <div className="vault-list">{filtered.map((x,i)=><article className={'vault-entry vault-card vault-tone-'+(i%5)} key={x.id}>
-   <div className="vault-card-top"><span className="vault-card-icon"><Server size={18}/></span><span className="vault-card-lock"><LockKeyhole size={13}/> ENCRYPTED</span></div>
-   <div className="vault-entry-head"><div><strong>{x.title}</strong><small>{x.category||'Credential'}</small></div></div>
-   <p className="vault-card-summary">Securely stored access details</p>
-   <div className="vault-card-bottom"><span><ShieldCheck size={14}/> Secure entry</span><button className="vault-open-button" onClick={()=>setSelected(x)}>View credentials <ArrowLeft size={14}/></button></div>
-  </article>)}</div>
+  <div className="vault-list">{groupedEntries.map(group=><section className="vault-client-group" key={group.name}>
+   <div className="vault-client-group-heading"><strong>{group.name}</strong><span>{group.items.length} {group.items.length===1?"credential":"credentials"}</span></div>
+   <div className="vault-client-credentials">{group.items.map((x,i)=><article className={"vault-entry vault-card vault-tone-"+(i%5)} key={x.id}>
+    <div className="vault-card-top"><span className="vault-card-icon"><Server size={18}/></span><span className="vault-card-lock"><LockKeyhole size={13}/> ENCRYPTED</span></div>
+    <div className="vault-entry-head"><div><strong>{x.title}</strong><small>{x.category||"Credential"}</small></div></div>
+    <p className="vault-card-summary">Securely stored access details</p>
+    <div className="vault-card-bottom"><span><ShieldCheck size={14}/> Secure entry</span><button className="vault-open-button" onClick={()=>setSelected(x)}>View credentials <ArrowLeft size={14}/></button></div>
+   </article>)}</div>
+  </section>)}</div>
   {!busy&&!filtered.length&&<div className="vault-empty"><LockKeyhole size={28}/><strong>No credentials found</strong><p>Try another search or add a new credential to this vault.</p></div>}
   {selected&&<div className="vault-detail-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setSelected(null)}}><section className="vault-detail-page" role="dialog" aria-modal="true" aria-labelledby="vault-detail-title">
    <header className="vault-detail-header"><button className="vault-back-button" onClick={()=>setSelected(null)}><ArrowLeft size={17}/> Back to credentials</button><span><LockKeyhole size={14}/> SECURE VAULT</span></header>
-   <div className="vault-detail-content"><div className="vault-detail-hero"><div className="vault-detail-hero-icon"><Server size={24}/></div><p className="eyebrow">CREDENTIAL RECORD</p><h2 id="vault-detail-title">{selected.title}</h2><span>{selected.category||'Credential'}</span></div>
+   <div className="vault-detail-content"><div className="vault-detail-hero"><div className="vault-detail-hero-icon"><Server size={24}/></div><p className="eyebrow">CREDENTIAL RECORD</p><h2 id="vault-detail-title">{selected.title}</h2><span>{selected.clientName?selected.clientName+' · ':''}{selected.category||'Credential'}</span></div>
     <div className="vault-detail-section"><div className="vault-detail-section-title"><KeyRound size={17}/><div><strong>Access details</strong><small>Reveal or copy individual fields</small></div></div><div className="vault-detail-grid"><Field label="Username" value={selected.username}/><Field label="Password" value={selected.password} secret/><Field label="Host / IP address" value={selected.host}/><Field label="Port" value={selected.port}/></div></div>
     {selected.notes&&<div className="vault-detail-section"><div className="vault-detail-section-title"><AlertCircle size={17}/><div><strong>Notes</strong><small>Additional context</small></div></div><p className="vault-detail-notes">{selected.notes}</p></div>}
     {selected.setup&&<div className="vault-detail-section"><div className="vault-detail-section-title"><ShieldCheck size={17}/><div><strong>Setup instructions</strong><small>Connection guidance</small></div></div><p className="vault-detail-notes">{selected.setup}</p></div>}
-    <div className="vault-detail-section vault-audit-section"><div className="vault-detail-section-title"><AlertCircle size={17}/><div><strong>Change history</strong><small>Who created or changed this credential, and when</small></div></div>{auditBusy?<p className="vault-audit-empty">Loading change history…</p>:audit.length?<div className="vault-audit-list">{audit.map(item=><div className="vault-audit-item" key={item.id}><div><strong>{item.action==='created'?'Credential created':item.action==='deleted'?'Credential deleted':item.action==='restored'?'Credential restored':'Credential updated'}</strong><p>{item.action==='updated'&&item.changedFields?.length?'Changed: '+item.changedFields.map(k=>({title:'Credential name',category:'Category',username:'Username',password:'Password',host:'Host / IP address',port:'Port',notes:'Notes',setup:'Setup instructions'}[k]||k)).join(', '):item.action==='created'?'Initial credential record saved':item.action==='deleted'?'Moved to recently deleted':'Credential restored to the vault'}</p><small>{item.who||'Unknown user'} · {item.createdAt?new Date(item.createdAt).toLocaleString():'Time unavailable'}</small></div></div>)}</div>:<p className="vault-audit-empty">No history is available for this credential yet.</p>}</div>
+    <div className="vault-detail-section vault-audit-section"><div className="vault-detail-section-title"><AlertCircle size={17}/><div><strong>Change history</strong><small>Who created or changed this credential, and when</small></div></div>{auditBusy?<p className="vault-audit-empty">Loading change history…</p>:auditError?<p className="vault-audit-empty" role="alert">Unable to load history: {auditError}</p>:audit.length?<div className="vault-audit-list">{audit.map(item=><div className="vault-audit-item" key={item.id}><div><strong>{item.action==='created'?'Credential created':item.action==='deleted'?'Credential deleted':item.action==='restored'?'Credential restored':'Credential updated'}</strong><p>{item.action==='updated'&&item.changedFields?.length?'Changed: '+item.changedFields.map(k=>({title:'Credential name',category:'Category',username:'Username',password:'Password',host:'Host / IP address',port:'Port',notes:'Notes',setup:'Setup instructions'}[k]||k)).join(', '):item.action==='created'?'Initial credential record saved':item.action==='deleted'?'Moved to recently deleted':'Credential restored to the vault'}</p><small>{item.who||'Unknown user'} · {item.createdAt?new Date(item.createdAt).toLocaleString():'Time unavailable'}</small></div></div>)}</div>:<p className="vault-audit-empty">No history is available for this credential yet.</p>}</div>
     <div className="vault-detail-actions"><button className="button-secondary" onClick={()=>{setEditing({...selected});setSelected(null)}}><Save size={15}/> Edit credential</button><button className="vault-delete-button" onClick={()=>del(selected.id)}><Trash2 size={15}/> Delete credential</button></div>
    </div>
   </section></div>}
