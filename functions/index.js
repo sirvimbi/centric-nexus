@@ -11,6 +11,9 @@ const auth = getAuth();
 const vaultKey = defineSecret("VAULT_MASTER_KEY");
 const REGION = "africa-south1";
 const WORKSPACE = "centric";
+// Restrict callable endpoints to the deployed web app origins. Firebase callable
+// handlers process OPTIONS preflight requests when CORS is configured here.
+const CALLABLE_CORS = ["https://centric-nexus.web.app", "https://centric-nexus.firebaseapp.com"];
 
 function actor(request) {
   if (!request.auth) throw new HttpsError("unauthenticated", "Sign in required.");
@@ -48,7 +51,7 @@ function cleanString(v, max=5000) {
   return v;
 }
 
-export const createWorkspaceUser = onCall({ region: REGION }, async request => {
+export const createWorkspaceUser = onCall({ region: REGION, cors: CALLABLE_CORS }, async request => {
   const admin = requireSuper(request);
   const { email, password, displayName, role } = request.data || {};
   if (!["Client viewer","Project editor","Admin"].includes(role)) throw new HttpsError("invalid-argument","Unsupported role.");
@@ -63,7 +66,7 @@ export const createWorkspaceUser = onCall({ region: REGION }, async request => {
   return { uid:user.uid,email:user.email };
 });
 
-export const updateWorkspaceUser = onCall({ region: REGION }, async request => {
+export const updateWorkspaceUser = onCall({ region: REGION, cors: CALLABLE_CORS }, async request => {
   const admin = requireSuper(request);
   const { uid, role, disabled, password, displayName, features } = request.data || {};
   if (typeof uid !== "string") throw new HttpsError("invalid-argument","User id required.");
@@ -98,7 +101,7 @@ export const updateWorkspaceUser = onCall({ region: REGION }, async request => {
   return {ok:true};
 });
 
-export const changeOwnPassword = onCall({region:REGION},async request=>{
+export const changeOwnPassword = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
   const a=actor(request), {password}=request.data||{};
   if(typeof password!=="string"||password.length<6) throw new HttpsError("invalid-argument","Password must be at least 6 characters.");
   await auth.updateUser(a.uid,{password});
@@ -107,7 +110,7 @@ export const changeOwnPassword = onCall({region:REGION},async request=>{
   return {ok:true};
 });
 
-export const saveVaultEntry = onCall({region:REGION,secrets:[vaultKey]},async request=>{
+export const saveVaultEntry = onCall({region:REGION,cors:CALLABLE_CORS,secrets:[vaultKey]},async request=>{
   const a=actor(request), d=request.data||{};
   const scope=d.scope, ownerUid=scope==="personal"?a.uid:"shared";
   requireVaultAccess(request,scope,ownerUid);
@@ -124,7 +127,7 @@ export const saveVaultEntry = onCall({region:REGION,secrets:[vaultKey]},async re
   return {id};
 });
 
-export const listVaultEntries = onCall({region:REGION,secrets:[vaultKey]},async request=>{
+export const listVaultEntries = onCall({region:REGION,cors:CALLABLE_CORS,secrets:[vaultKey]},async request=>{
   const a=actor(request),scope=request.data?.scope;
   const ownerUid=scope==="personal"?a.uid:"shared"; requireVaultAccess(request,scope,ownerUid);
   if(!["personal","shared"].includes(scope)) throw new HttpsError("invalid-argument","Invalid vault scope.");
@@ -132,7 +135,7 @@ export const listVaultEntries = onCall({region:REGION,secrets:[vaultKey]},async 
   return {entries:snap.docs.filter(doc=>!doc.data().deletedAt).map(doc=>({id:doc.id,...doc.data(),...decrypt(doc.data().encrypted),encrypted:undefined}))};
 });
 
-export const deleteVaultEntry = onCall({region:REGION},async request=>{
+export const deleteVaultEntry = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
   const a=actor(request),{scope,id}=request.data||{},ownerUid=scope==="personal"?a.uid:"shared";
   requireVaultAccess(request,scope,ownerUid);
   if(!["personal","shared"].includes(scope)||typeof id!=="string") throw new HttpsError("invalid-argument","Invalid vault entry.");
@@ -143,7 +146,7 @@ export const deleteVaultEntry = onCall({region:REGION},async request=>{
   return {ok:true};
 });
 
-export const restoreVaultEntry = onCall({region:REGION},async request=>{
+export const restoreVaultEntry = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
   const a=actor(request),{scope,id}=request.data||{},ownerUid=scope==="personal"?a.uid:"shared";
   requireVaultAccess(request,scope,ownerUid);
   if(!["personal","shared"].includes(scope)||typeof id!=="string") throw new HttpsError("invalid-argument","Invalid vault entry.");
@@ -155,13 +158,13 @@ export const restoreVaultEntry = onCall({region:REGION},async request=>{
   return {ok:true};
 });
 
-export const listWorkspaceUsers = onCall({region:REGION},async request=>{
+export const listWorkspaceUsers = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
  requireSuper(request);
  const snap=await db.collection(`workspaces/${WORKSPACE}/members`).get();
  return {users:await Promise.all(snap.docs.map(async d=>{const u=await auth.getUser(d.id);return {uid:u.uid,email:u.email||"",displayName:u.displayName||"",role:d.data().role,status:d.data().status||"active",disabled:u.disabled};}))};
 });
 
-export const setRoleFeatureGrants = onCall({region:REGION},async request=>{
+export const setRoleFeatureGrants = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
  requireSuper(request);
  const {role,features}=request.data||{};
  if(!["Client viewer","Project editor","Admin"].includes(role)||!features||typeof features!=="object") throw new HttpsError("invalid-argument","Invalid role or feature grants.");
@@ -176,7 +179,7 @@ export const setRoleFeatureGrants = onCall({region:REGION},async request=>{
  return {updated:members.size};
 });
 
-export const deleteWorkspaceUser = onCall({region:REGION},async request=>{
+export const deleteWorkspaceUser = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
  const admin=requireSuper(request),uid=request.data?.uid;
  if(typeof uid!=="string"||uid===admin.uid) throw new HttpsError("invalid-argument","A different user id is required.");
  await auth.deleteUser(uid);
@@ -188,7 +191,7 @@ export const deleteWorkspaceUser = onCall({region:REGION},async request=>{
 
 
 // Credential audit history: field names only are recorded; secret values are never copied into the audit log.
-export const listVaultAudit = onCall({region:REGION,secrets:[vaultKey]},async request=>{
+export const listVaultAudit = onCall({region:REGION,cors:CALLABLE_CORS,secrets:[vaultKey]},async request=>{
  const a=actor(request),{scope,entryId}=request.data||{},ownerUid=scope==="personal"?a.uid:"shared";
  requireVaultAccess(request,scope,ownerUid);
  if(!["personal","shared"].includes(scope)||typeof entryId!=="string") throw new HttpsError("invalid-argument","Invalid audit request.");
@@ -205,7 +208,7 @@ export const listVaultAudit = onCall({region:REGION,secrets:[vaultKey]},async re
  }))};
 });
 // Categories are centrally managed and can only be changed by the Super Admin.
-export const listVaultCategories = onCall({region:REGION},async request=>{
+export const listVaultCategories = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
  actor(request);
  const snap=await db.collection("vaultCategories").get();
  const defaults=[
@@ -217,14 +220,14 @@ export const listVaultCategories = onCall({region:REGION},async request=>{
  snap.docs.forEach(doc=>{const d=doc.data();if(d.deleted===true)byId.delete(doc.id);else if(d.name)byId.set(doc.id,{id:doc.id,name:d.name})});
  return {categories:[...byId.values()].sort((a,b)=>a.name.localeCompare(b.name))};
 });
-export const saveVaultCategory = onCall({region:REGION},async request=>{
+export const saveVaultCategory = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
  const a=requireSuper(request),{id,name}=request.data||{};
  if(typeof name!=="string"||!name.trim()||name.trim().length>60) throw new HttpsError("invalid-argument","Category name must be 1–60 characters.");
  const categoryId=typeof id==="string"&&/^[a-z0-9_-]{1,80}$/.test(id)?id:name.trim().toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,80);
  await db.doc("vaultCategories/"+categoryId).set({name:name.trim(),deleted:false,updatedBy:a.uid,updatedAt:FieldValue.serverTimestamp()},{merge:true});
  return {id:categoryId,name:name.trim()};
 });
-export const deleteVaultCategory = onCall({region:REGION},async request=>{
+export const deleteVaultCategory = onCall({region:REGION,cors:CALLABLE_CORS},async request=>{
  requireSuper(request);const id=request.data?.id;
  if(typeof id!=="string"||!id) throw new HttpsError("invalid-argument","Category id required.");
  await db.doc("vaultCategories/"+id).set({deleted:true,updatedBy:request.auth.uid,updatedAt:FieldValue.serverTimestamp()},{merge:true});return {ok:true};
