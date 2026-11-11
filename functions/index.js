@@ -129,15 +129,29 @@ export const listVaultEntries = onCall({region:REGION,secrets:[vaultKey]},async 
   const ownerUid=scope==="personal"?a.uid:"shared"; requireVaultAccess(request,scope,ownerUid);
   if(!["personal","shared"].includes(scope)) throw new HttpsError("invalid-argument","Invalid vault scope.");
   const snap=await db.collection(`vault/${scope==="shared"?"shared":"personal_"+a.uid}/entries`).get();
-  return {entries:snap.docs.map(doc=>({id:doc.id,...doc.data(),...decrypt(doc.data().encrypted),encrypted:undefined}))};
+  return {entries:snap.docs.filter(doc=>!doc.data().deletedAt).map(doc=>({id:doc.id,...doc.data(),...decrypt(doc.data().encrypted),encrypted:undefined}))};
 });
 
 export const deleteVaultEntry = onCall({region:REGION},async request=>{
   const a=actor(request),{scope,id}=request.data||{},ownerUid=scope==="personal"?a.uid:"shared";
   requireVaultAccess(request,scope,ownerUid);
+  if(!["personal","shared"].includes(scope)||typeof id!=="string") throw new HttpsError("invalid-argument","Invalid vault entry.");
   const ref=db.doc(`vault/${scope==="shared"?"shared":"personal_"+a.uid}/entries/${id}`);
   const snap=await ref.get(); if(!snap.exists) return {ok:true};
-  await ref.delete(); await db.collection("vaultAudit").add({scope,entryId:id,actorUid:a.uid,action:"deleted",changedFields:[],createdAt:FieldValue.serverTimestamp()});
+  await ref.set({deletedAt:FieldValue.serverTimestamp(),deletedBy:a.uid},{merge:true});
+  await db.collection("vaultAudit").add({scope,entryId:id,actorUid:a.uid,action:"deleted",changedFields:[],createdAt:FieldValue.serverTimestamp()});
+  return {ok:true};
+});
+
+export const restoreVaultEntry = onCall({region:REGION},async request=>{
+  const a=actor(request),{scope,id}=request.data||{},ownerUid=scope==="personal"?a.uid:"shared";
+  requireVaultAccess(request,scope,ownerUid);
+  if(!["personal","shared"].includes(scope)||typeof id!=="string") throw new HttpsError("invalid-argument","Invalid vault entry.");
+  const ref=db.doc(`vault/${scope==="shared"?"shared":"personal_"+a.uid}/entries/${id}`);
+  const snap=await ref.get();
+  if(!snap.exists||!snap.data().deletedAt) throw new HttpsError("not-found","Deleted credential is no longer available to restore.");
+  await ref.update({deletedAt:FieldValue.delete(),deletedBy:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()});
+  await db.collection("vaultAudit").add({scope,entryId:id,actorUid:a.uid,action:"restored",changedFields:[],createdAt:FieldValue.serverTimestamp()});
   return {ok:true};
 });
 
@@ -178,8 +192,9 @@ export const listVaultAudit = onCall({region:REGION},async request=>{
  const a=actor(request),{scope,entryId}=request.data||{},ownerUid=scope==="personal"?a.uid:"shared";
  requireVaultAccess(request,scope,ownerUid);
  if(!["personal","shared"].includes(scope)||typeof entryId!=="string") throw new HttpsError("invalid-argument","Invalid audit request.");
- const snap=await db.collection("vaultAudit").where("scope","==",scope).where("entryId","==",entryId).orderBy("createdAt","desc").limit(100).get();
- return {history:await Promise.all(snap.docs.map(async doc=>{
+ const snap=await db.collection("vaultAudit").where("scope","==",scope).where("entryId","==",entryId).get();
+ const docs=snap.docs.sort((x,y)=>(y.data().createdAt?.toMillis?.()||0)-(x.data().createdAt?.toMillis?.()||0)).slice(0,100);
+ return {history:await Promise.all(docs.map(async doc=>{
   const item=doc.data();let who="Former or unavailable user";
   try{const u=await auth.getUser(item.actorUid);who=u.displayName||u.email||"Workspace user"}catch{}
   return {id:doc.id,action:item.action,changedFields:item.changedFields||[],who,createdAt:item.createdAt?.toDate?.().toISOString()||null};
@@ -190,13 +205,21 @@ export const listVaultAudit = onCall({region:REGION},async request=>{
 export const listVaultCategories = onCall({region:REGION},async request=>{
  actor(request);
  const snap=await db.collection("vaultCategories").orderBy("name").get();
- const categories=snap.docs.map(d=>({id:d.id,name:d.data().name}));
- return {categories:categories.length?categories:[
+ const defaults=[
+  {id:"application",name:"Application"},{id:"database",name:"Database"},{id:"server",name:"Server"},
+  {id:"virtual-machine",name:"Virtual machine"},{id:"network",name:"Network"},{id:"vpn",name:"VPN"},
+  {id:"email",name:"Email"},{id:"cloud",name:"Cloud service"},{id:"domain",name:"Domain / hosting"},{id:"other",name:"Other"}
+ ];
+ const saved=snap.docs.map(d=>({id:d.id,name:d.data().name}));
+ const byId=new Map(defaults.map(x=>[x.id,x])); saved.forEach(x=>byId.set(x.id,x));
+ return {categories:[...byId.values()].sort((a,b)=>a.name.localeCompare(b.name))};
+ /* legacy defaults retained below for old deployments:
+ return {categories:[
   {id:"application",name:"Application"},{id:"database",name:"Database"},{id:"server",name:"Server"},
   {id:"virtual-machine",name:"Virtual machine"},{id:"network",name:"Network"},{id:"vpn",name:"VPN"},
   {id:"email",name:"Email"},{id:"cloud",name:"Cloud service"},{id:"domain",name:"Domain / hosting"},{id:"other",name:"Other"}
  ]};
-});
+}); */
 export const saveVaultCategory = onCall({region:REGION},async request=>{
  const a=requireSuper(request),{id,name}=request.data||{};
  if(typeof name!=="string"||!name.trim()||name.trim().length>60) throw new HttpsError("invalid-argument","Category name must be 1–60 characters.");
