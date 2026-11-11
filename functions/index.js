@@ -193,14 +193,17 @@ export const listVaultAudit = onCall({region:REGION},async request=>{
  requireVaultAccess(request,scope,ownerUid);
  if(!["personal","shared"].includes(scope)||typeof entryId!=="string") throw new HttpsError("invalid-argument","Invalid audit request.");
  const snap=await db.collection("vaultAudit").where("scope","==",scope).where("entryId","==",entryId).get();
- const docs=snap.docs.sort((x,y)=>(y.data().createdAt?.toMillis?.()||0)-(x.data().createdAt?.toMillis?.()||0)).slice(0,100);
- return {history:await Promise.all(docs.map(async doc=>{
-  const item=doc.data();let who="Former or unavailable user";
+ const events=snap.docs.map(doc=>({id:doc.id,...doc.data()}));
+ const entryRef=db.doc("vault/"+(scope==="shared"?"shared":"personal_"+a.uid)+"/entries/"+entryId);
+ const entry=await entryRef.get();
+ if(entry.exists&&!events.some(x=>x.action==="created")){const d=entry.data();events.push({id:"created-"+entryId,actorUid:d.createdBy,action:"created",changedFields:Object.keys(decrypt(d.encrypted)).filter(k=>k!=="password"),createdAt:d.createdAt});}
+ events.sort((x,y)=>(y.createdAt?.toMillis?.()||0)-(x.createdAt?.toMillis?.()||0));
+ return {history:await Promise.all(events.slice(0,100).map(async item=>{
+  let who="Former or unavailable user";
   try{const u=await auth.getUser(item.actorUid);who=u.displayName||u.email||"Workspace user"}catch{}
-  return {id:doc.id,action:item.action,changedFields:item.changedFields||[],who,createdAt:item.createdAt?.toDate?.().toISOString()||null};
+  return {id:item.id,action:item.action,changedFields:item.changedFields||[],who,createdAt:item.createdAt?.toDate?.().toISOString()||null};
  }))};
 });
-
 // Categories are centrally managed and can only be changed by the Super Admin.
 export const listVaultCategories = onCall({region:REGION},async request=>{
  actor(request);
@@ -213,13 +216,7 @@ export const listVaultCategories = onCall({region:REGION},async request=>{
  const saved=snap.docs.map(d=>({id:d.id,name:d.data().name}));
  const byId=new Map(defaults.map(x=>[x.id,x])); saved.forEach(x=>byId.set(x.id,x));
  return {categories:[...byId.values()].sort((a,b)=>a.name.localeCompare(b.name))};
- /* legacy defaults retained below for old deployments:
- return {categories:[
-  {id:"application",name:"Application"},{id:"database",name:"Database"},{id:"server",name:"Server"},
-  {id:"virtual-machine",name:"Virtual machine"},{id:"network",name:"Network"},{id:"vpn",name:"VPN"},
-  {id:"email",name:"Email"},{id:"cloud",name:"Cloud service"},{id:"domain",name:"Domain / hosting"},{id:"other",name:"Other"}
- ]};
-}); */
+
 export const saveVaultCategory = onCall({region:REGION},async request=>{
  const a=requireSuper(request),{id,name}=request.data||{};
  if(typeof name!=="string"||!name.trim()||name.trim().length>60) throw new HttpsError("invalid-argument","Category name must be 1–60 characters.");
