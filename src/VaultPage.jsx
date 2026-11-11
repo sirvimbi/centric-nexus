@@ -54,12 +54,20 @@ export default function VaultPage({user,role}) {
  const renameCategory=async item=>{const name=window.prompt('Edit category name',item.name);if(!name||!name.trim())return;try{const r=await call('saveVaultCategory',{id:item.id,name:name.trim()});setCategories(v=>v.map(x=>x.id===item.id?r.data:x).sort((a,b)=>a.name.localeCompare(b.name)));showToast('Category updated')}catch(e){setError(e.message||'Unable to update category.')}}
  const removeCategory=async item=>{if(!window.confirm('Delete category '+item.name+'?'))return;try{await call('deleteVaultCategory',{id:item.id});setCategories(v=>v.filter(x=>x.id!==item.id));showToast('Category deleted')}catch(e){setError(e.message||'Unable to delete category.')}}
  const parseCsv=source=>{
+  // Excel and many CSV generators prepend a UTF-8 BOM. Remove it before
+  // parsing so the first column is recognised as "title", not "\uFEFFtitle".
+  const csv=String(source||'').replace(/^\uFEFF/,'')
   const rows=[];let row=[],value='',quoted=false
-  for(let i=0;i<source.length;i++){const ch=source[i],next=source[i+1];if(ch==='"'&&quoted&&next==='"'){value+='"';i++}else if(ch==='"'){quoted=!quoted}else if(ch===','&&!quoted){row.push(value);value=''}else if((ch==='\\n'||ch==='\\r')&&!quoted){if(ch==='\\r'&&next==='\\n')i++;row.push(value);if(row.some(x=>x.trim()))rows.push(row);row=[];value=''}else value+=ch}
+  for(let i=0;i<csv.length;i++){const ch=csv[i],next=csv[i+1];if(ch==='"'&&quoted&&next==='"'){value+='"';i++}else if(ch==='"'){quoted=!quoted}else if(ch===','&&!quoted){row.push(value);value=''}else if((ch==='\n'||ch==='\r')&&!quoted){if(ch==='\r'&&next==='\n')i++;row.push(value);if(row.some(x=>x.trim()))rows.push(row);row=[];value=''}else value+=ch}
   row.push(value);if(row.some(x=>x.trim()))rows.push(row);if(quoted)throw new Error('CSV has an unclosed quoted field.')
-  const headers=(rows.shift()||[]).map(x=>x.trim().toLowerCase())
+  const headers=(rows.shift()||[]).map((x,i)=>(i===0?x.replace(/^\uFEFF/,''):x).trim().toLowerCase())
   const required=['title','category','username','password','host','port','notes']
-  if(!required.every(x=>headers.includes(x)))throw new Error('CSV headers must be: '+required.join(', '))
+  const missing=required.filter(x=>!headers.includes(x))
+  const duplicates=headers.filter((h,i)=>h&&headers.indexOf(h)!==i)
+  if(missing.length||duplicates.length){
+   const detail=missing.length?'Missing: '+missing.join(', '):'Duplicate: '+[...new Set(duplicates)].join(', ')
+   throw new Error('CSV headers must be: '+required.join(', ')+'. '+detail+'.')
+  }
   return rows.map(r=>Object.fromEntries(headers.map((h,i)=>[h,(r[i]||'').trim()]))).filter(x=>x.title)
  }
  const importCsv=async file=>{
